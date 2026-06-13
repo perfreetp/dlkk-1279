@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Users, CreditCard, Clock, Star, Plus, Check, X, AlertCircle, TrendingUp, Briefcase, Lightbulb, FileText } from 'lucide-react';
+import { Users, CreditCard, Clock, Star, Plus, Check, X, AlertCircle, TrendingUp, Briefcase, Lightbulb, FileText, ChevronUp, ChevronDown, Trash2, Edit3, Save } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Position } from '../data/types';
 import { mockTeam } from '../data/mockData';
 
 export default function TeamSpace() {
-  const { tools, recommendations, applications, addApplication, approveApplication, rejectApplication } = useStore();
+  const { tools, recommendations, applications, addApplication, approveApplication, rejectApplication, addRecommendation, removeRecommendation, reorderRecommendations, getRecommendationsByPosition } = useStore();
   const [activeTab, setActiveTab] = useState<'quotas' | 'recommendations' | 'applications' | 'suggestions'>('quotas');
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [newApplication, setNewApplication] = useState({ toolName: '', description: '' });
+  const [editingPosition, setEditingPosition] = useState<Position | null>(null);
   
   const positions: Position[] = ['文案', '设计', '翻译', '运营'];
   
@@ -89,6 +90,30 @@ export default function TeamSpace() {
       case 'cleanup': return <FileText className="w-5 h-5 text-gray-600" />;
       case 'warning': return <AlertCircle className="w-5 h-5 text-yellow-600" />;
       default: return <Lightbulb className="w-5 h-5 text-gray-600" />;
+    }
+  };
+  
+  const moveRecommendationUp = (position: Position, index: number) => {
+    const recs = getRecommendationsByPosition(position);
+    if (index > 0) {
+      reorderRecommendations(position, index, index - 1);
+    }
+  };
+  
+  const moveRecommendationDown = (position: Position, index: number) => {
+    const recs = getRecommendationsByPosition(position);
+    if (index < recs.length - 1) {
+      reorderRecommendations(position, index, index + 1);
+    }
+  };
+  
+  const handleAddRecommendation = (position: Position) => {
+    const positionRecs = getRecommendationsByPosition(position);
+    const availableTools = tools.filter(t => !positionRecs.some(r => r.toolId === t.id));
+    
+    if (availableTools.length > 0) {
+      const firstTool = availableTools[0];
+      addRecommendation(position, firstTool.id, firstTool.name);
     }
   };
 
@@ -185,42 +210,110 @@ export default function TeamSpace() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">团队推荐工具</h2>
-                <p className="text-sm text-gray-500">按岗位推荐适合的工具</p>
+                <p className="text-sm text-gray-500">按岗位推荐适合的工具，支持自定义维护</p>
               </div>
             </div>
             
             {positions.map((position) => {
-              const positionTools = recommendations.filter(r => r.position === position);
-              const toolDetails = positionTools.map(r => tools.find(t => t.id === r.toolId)).filter(Boolean);
+              const positionRecs = getRecommendationsByPosition(position);
+              const availableTools = tools.filter(t => !positionRecs.some(r => r.toolId === t.id));
+              const isEditing = editingPosition === position;
               
               return (
                 <div key={position} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-accent-100 rounded-xl flex items-center justify-center">
-                      <Briefcase className="w-5 h-5 text-accent-700" />
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-accent-100 rounded-xl flex items-center justify-center">
+                        <Briefcase className="w-5 h-5 text-accent-700" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{position}岗位推荐</h3>
+                        <p className="text-sm text-gray-500">{positionRecs.length} 个推荐工具</p>
+                      </div>
                     </div>
-                    <div>
-                      <h3 className="font-semibold text-gray-900">{position}岗位推荐</h3>
-                      <p className="text-sm text-gray-500">{toolDetails.length} 个推荐工具</p>
-                    </div>
+                    <button
+                      onClick={() => setEditingPosition(isEditing ? null : position)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        isEditing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      }`}
+                    >
+                      {isEditing ? (
+                        <>
+                          <Save className="w-4 h-4" />
+                          完成编辑
+                        </>
+                      ) : (
+                        <>
+                          <Edit3 className="w-4 h-4" />
+                          编辑
+                        </>
+                      )}
+                    </button>
                   </div>
                   
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                    {toolDetails.map((tool) => (
-                      tool && (
-                        <div key={tool.id} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                          <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center">
+                  <div className="space-y-2">
+                    {positionRecs.map((rec, index) => {
+                      const tool = tools.find(t => t.id === rec.toolId);
+                      return (
+                        <div key={rec.id} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
+                          {isEditing && (
+                            <>
+                              <button
+                                onClick={() => moveRecommendationUp(position, index)}
+                                disabled={index === 0}
+                                className="p-1 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors"
+                              >
+                                <ChevronUp className="w-4 h-4 text-gray-500" />
+                              </button>
+                              <button
+                                onClick={() => moveRecommendationDown(position, index)}
+                                disabled={index === positionRecs.length - 1}
+                                className="p-1 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors"
+                              >
+                                <ChevronDown className="w-4 h-4 text-gray-500" />
+                              </button>
+                            </>
+                          )}
+                          <span className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-600 flex-shrink-0">
+                            {index + 1}
+                          </span>
+                          <div className="w-10 h-10 bg-primary-100 rounded-lg flex items-center justify-center flex-shrink-0">
                             <CreditCard className="w-5 h-5 text-primary-600" />
                           </div>
-                          <div className="flex-1">
-                            <p className="font-medium text-gray-900">{tool.name}</p>
-                            <p className="text-xs text-gray-500">{tool.category}</p>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-gray-900 truncate">{tool?.name}</p>
+                            <p className="text-xs text-gray-500">{tool?.category}</p>
                           </div>
-                          <Star className="w-5 h-5 text-yellow-500 fill-current" />
+                          {isEditing && (
+                            <button
+                              onClick={() => removeRecommendation(position, rec.toolId)}
+                              className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
                         </div>
-                      )
-                    ))}
+                      );
+                    })}
                   </div>
+                  
+                  {isEditing && availableTools.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <p className="text-sm font-medium text-gray-700 mb-2">添加工具到 {position} 岗位</p>
+                      <div className="flex flex-wrap gap-2">
+                        {availableTools.map((tool) => (
+                          <button
+                            key={tool.id}
+                            onClick={() => addRecommendation(position, tool.id, tool.name)}
+                            className="flex items-center gap-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-700 transition-colors"
+                          >
+                            <Plus className="w-4 h-4" />
+                            <span>{tool.name}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

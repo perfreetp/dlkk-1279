@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Search, Star, Clock, Filter, ChevronDown, ChevronUp, Check, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { Search, Star, Clock, Filter, ChevronDown, ChevronUp, Check, FileText, TrendingUp, Calendar, Award, Sparkles } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Task } from '../data/types';
 
 type StatusFilter = 'all' | 'pending' | 'running' | 'completed' | 'failed';
 
 export default function TaskHistory() {
-  const { tasks, updateTaskScore } = useStore();
+  const { tasks, updateTaskScore, addToOutstandingCases, removeFromOutstandingCases, outstandingCases } = useStore();
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [showOutstandingOnly, setShowOutstandingOnly] = useState(false);
   const [expandedTask, setExpandedTask] = useState<string | null>(null);
   const [scoringTask, setScoringTask] = useState<string | null>(null);
   const [score, setScore] = useState(0);
@@ -19,7 +20,8 @@ export default function TaskHistory() {
       task.toolName.toLowerCase().includes(searchQuery.toLowerCase()) ||
       task.input.toLowerCase().includes(searchQuery.toLowerCase());
     const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
-    return matchesSearch && matchesStatus;
+    const matchesOutstanding = !showOutstandingOnly || outstandingCases.includes(task.id);
+    return matchesSearch && matchesStatus && matchesOutstanding;
   });
   
   const groupedTasks = filteredTasks.reduce((acc, task) => {
@@ -76,6 +78,10 @@ export default function TaskHistory() {
                 <TrendingUp className="w-4 h-4 text-green-600" />
                 <span className="text-sm font-medium text-green-700">平均评分 {avgScore}</span>
               </div>
+              <div className="flex items-center gap-2 px-4 py-2 bg-yellow-50 rounded-xl">
+                <Award className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-700">优秀案例 {outstandingCases.length}</span>
+              </div>
               <div className="flex items-center gap-2 px-4 py-2 bg-primary-50 rounded-xl">
                 <FileText className="w-4 h-4 text-primary-600" />
                 <span className="text-sm font-medium text-primary-700">共 {tasks.length} 个任务</span>
@@ -114,11 +120,41 @@ export default function TaskHistory() {
                 <option value="failed">失败</option>
               </select>
             </div>
+            <button
+              onClick={() => setShowOutstandingOnly(!showOutstandingOnly)}
+              className={`flex items-center gap-2 px-4 py-3 rounded-xl border transition-colors ${
+                showOutstandingOnly ? 'bg-yellow-50 border-yellow-200 text-yellow-700' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'
+              }`}
+            >
+              <Award className={`w-5 h-5 ${showOutstandingOnly ? 'fill-current' : ''}`} />
+              <span className="font-medium">优秀案例</span>
+            </button>
           </div>
         </div>
       </header>
       
       <main className="max-w-7xl mx-auto px-6 py-6">
+        {outstandingCases.length > 0 && !showOutstandingOnly && (
+          <div className="mb-6 bg-gradient-to-r from-yellow-50 to-orange-50 rounded-2xl p-4 border border-yellow-200">
+            <div className="flex items-center gap-3 mb-3">
+              <Sparkles className="w-5 h-5 text-yellow-600" />
+              <h3 className="font-semibold text-gray-900">优秀案例</h3>
+              <span className="text-sm text-gray-500">({outstandingCases.length} 个)</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {tasks.filter(t => outstandingCases.includes(t.id)).slice(0, 3).map((task) => (
+                <div key={task.id} className="bg-white rounded-xl p-3 shadow-sm">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Award className="w-4 h-4 text-yellow-500" />
+                    <span className="font-medium text-gray-900 text-sm">{task.toolName}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 line-clamp-2">{task.input}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+        
         {Object.entries(groupedTasks).map(([date, dayTasks]) => (
           <div key={date} className="mb-6">
             <div className="flex items-center gap-3 mb-4">
@@ -128,140 +164,169 @@ export default function TaskHistory() {
             </div>
             
             <div className="space-y-3">
-              {dayTasks.map((task) => (
-                <div 
-                  key={task.id} 
-                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
-                >
+              {dayTasks.map((task) => {
+                const isOutstanding = outstandingCases.includes(task.id);
+                return (
                   <div 
-                    className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
-                    onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                    key={task.id} 
+                    className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
                   >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
-                          <FileText className="w-6 h-6 text-primary-600" />
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="font-semibold text-gray-900">{task.toolName}</h3>
-                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>
-                              {statusLabels[task.status]}
-                            </span>
+                    <div 
+                      className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                      onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                            <FileText className="w-6 h-6 text-primary-600" />
                           </div>
-                          <p className="text-sm text-gray-500 line-clamp-1">{task.input}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-4">
-                        {task.score && (
-                          <div className="flex items-center gap-1">
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Star 
-                                key={star} 
-                                className={`w-4 h-4 ${star <= task.score ? 'text-yellow-500 fill-current' : 'text-gray-300'}`} 
-                              />
-                            ))}
-                          </div>
-                        )}
-                        <span className="text-sm text-gray-400">{formatTime(task.createdAt)}</span>
-                        {expandedTask === task.id ? (
-                          <ChevronUp className="w-5 h-5 text-gray-400" />
-                        ) : (
-                          <ChevronDown className="w-5 h-5 text-gray-400" />
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  
-                  {expandedTask === task.id && (
-                    <div className="px-4 pb-4 border-t border-gray-100">
-                      <div className="pt-4 space-y-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">输入内容</label>
-                          <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap">
-                            {task.input}
-                          </div>
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-2">输出结果</label>
-                          <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap min-h-[100px]">
-                            {task.output}
-                          </div>
-                        </div>
-                        
-                        {task.status === 'completed' && !task.score && scoringTask !== task.id && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setScoringTask(task.id);
-                            }}
-                            className="w-full flex items-center justify-center gap-2 py-3 bg-accent-50 hover:bg-accent-100 text-accent-700 rounded-xl font-medium transition-colors"
-                          >
-                            <Star className="w-5 h-5" />
-                            <span>给本次结果评分</span>
-                          </button>
-                        )}
-                        
-                        {scoringTask === task.id && (
-                          <div className="p-4 bg-accent-50 rounded-xl">
-                            <div className="flex items-center gap-2 mb-4">
-                              <Star className="w-5 h-5 text-accent-700" />
-                              <span className="font-medium text-accent-800">评分</span>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-semibold text-gray-900">{task.toolName}</h3>
+                              {isOutstanding && (
+                                <span className="px-2 py-0.5 bg-yellow-100 text-yellow-700 rounded-full text-xs font-medium">
+                                  优秀案例
+                                </span>
+                              )}
+                              <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>
+                                {statusLabels[task.status]}
+                              </span>
                             </div>
-                            <div className="flex items-center gap-2 mb-4">
+                            <p className="text-sm text-gray-500 line-clamp-1">{task.input}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          {task.score && (
+                            <div className="flex items-center gap-1">
                               {[1, 2, 3, 4, 5].map((star) => (
-                                <button
-                                  key={star}
-                                  onClick={() => setScore(star)}
-                                  className="p-2 rounded-lg transition-colors"
-                                >
-                                  <Star 
-                                    className={`w-8 h-8 ${star <= score ? 'text-yellow-500 fill-current' : 'text-gray-300 hover:text-yellow-400'}`} 
-                                  />
-                                </button>
+                                <Star 
+                                  key={star} 
+                                  className={`w-4 h-4 ${star <= task.score ? 'text-yellow-500 fill-current' : 'text-gray-300'}`} 
+                                />
                               ))}
                             </div>
-                            <textarea
-                              value={comment}
-                              onChange={(e) => setComment(e.target.value)}
-                              placeholder="添加评语（可选）"
-                              rows={2}
-                              className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-700 resize-none"
-                            />
-                            <div className="flex items-center justify-end gap-3 mt-3">
-                              <button
-                                onClick={() => setScoringTask(null)}
-                                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
-                              >
-                                取消
-                              </button>
-                              <button
-                                onClick={() => handleSubmitScore(task.id)}
-                                disabled={score === 0}
-                                className="flex items-center gap-2 px-4 py-2 bg-accent-700 hover:bg-accent-800 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
-                              >
-                                <Check className="w-4 h-4" />
-                                提交评分
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        {task.comment && (
-                          <div className="p-3 bg-yellow-50 rounded-xl">
-                            <div className="flex items-center gap-2 mb-1">
-                              <Star className="w-4 h-4 text-yellow-500" />
-                              <span className="text-sm font-medium text-yellow-800">评语</span>
-                            </div>
-                            <p className="text-sm text-yellow-700">{task.comment}</p>
-                          </div>
-                        )}
+                          )}
+                          <span className="text-sm text-gray-400">{formatTime(task.createdAt)}</span>
+                          {expandedTask === task.id ? (
+                            <ChevronUp className="w-5 h-5 text-gray-400" />
+                          ) : (
+                            <ChevronDown className="w-5 h-5 text-gray-400" />
+                          )}
+                        </div>
                       </div>
                     </div>
-                  )}
-                </div>
-              ))}
+                    
+                    {expandedTask === task.id && (
+                      <div className="px-4 pb-4 border-t border-gray-100">
+                        <div className="pt-4 space-y-4">
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">输入内容</label>
+                            <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap">
+                              {task.input}
+                            </div>
+                          </div>
+                          
+                          <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-2">输出结果</label>
+                            <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap min-h-[100px]">
+                              {task.output}
+                            </div>
+                          </div>
+                          
+                          {task.status === 'completed' && !task.score && scoringTask !== task.id && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setScoringTask(task.id);
+                              }}
+                              className="w-full flex items-center justify-center gap-2 py-3 bg-accent-50 hover:bg-accent-100 text-accent-700 rounded-xl font-medium transition-colors"
+                            >
+                              <Star className="w-5 h-5" />
+                              <span>给本次结果评分</span>
+                            </button>
+                          )}
+                          
+                          {scoringTask === task.id && (
+                            <div className="p-4 bg-accent-50 rounded-xl">
+                              <div className="flex items-center gap-2 mb-4">
+                                <Star className="w-5 h-5 text-accent-700" />
+                                <span className="font-medium text-accent-800">评分</span>
+                              </div>
+                              <div className="flex items-center gap-2 mb-4">
+                                {[1, 2, 3, 4, 5].map((star) => (
+                                  <button
+                                    key={star}
+                                    onClick={() => setScore(star)}
+                                    className="p-2 rounded-lg transition-colors"
+                                  >
+                                    <Star 
+                                      className={`w-8 h-8 ${star <= score ? 'text-yellow-500 fill-current' : 'text-gray-300 hover:text-yellow-400'}`} 
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                              <textarea
+                                value={comment}
+                                onChange={(e) => setComment(e.target.value)}
+                                placeholder="添加评语（可选）"
+                                rows={2}
+                                className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-700 resize-none"
+                              />
+                              <div className="flex items-center justify-end gap-3 mt-3">
+                                <button
+                                  onClick={() => setScoringTask(null)}
+                                  className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                                >
+                                  取消
+                                </button>
+                                <button
+                                  onClick={() => handleSubmitScore(task.id)}
+                                  disabled={score === 0}
+                                  className="flex items-center gap-2 px-4 py-2 bg-accent-700 hover:bg-accent-800 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                                >
+                                  <Check className="w-4 h-4" />
+                                  提交评分
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                          
+                          {task.comment && (
+                            <div className="p-3 bg-yellow-50 rounded-xl">
+                              <div className="flex items-center gap-2 mb-1">
+                                <Star className="w-4 h-4 text-yellow-500" />
+                                <span className="text-sm font-medium text-yellow-800">评语</span>
+                              </div>
+                              <p className="text-sm text-yellow-700">{task.comment}</p>
+                            </div>
+                          )}
+                          
+                          {task.status === 'completed' && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isOutstanding) {
+                                  removeFromOutstandingCases(task.id);
+                                } else {
+                                  addToOutstandingCases(task.id);
+                                }
+                              }}
+                              className={`w-full flex items-center justify-center gap-2 py-2 rounded-xl font-medium transition-colors ${
+                                isOutstanding 
+                                  ? 'bg-yellow-100 hover:bg-yellow-200 text-yellow-700' 
+                                  : 'bg-gray-100 hover:bg-gray-200 text-gray-700'
+                              }`}
+                            >
+                              <Award className={`w-4 h-4 ${isOutstanding ? 'fill-current' : ''}`} />
+                              <span>{isOutstanding ? '移除优秀案例' : '加入优秀案例'}</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         ))}
@@ -271,8 +336,10 @@ export default function TaskHistory() {
             <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
               <Clock className="w-8 h-8 text-gray-400" />
             </div>
-            <h3 className="text-lg font-medium text-gray-900 mb-2">暂无任务记录</h3>
-            <p className="text-gray-500">在工作台执行任务后会在这里显示记录</p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">
+              {showOutstandingOnly ? '暂无优秀案例' : '暂无任务记录'}
+            </h3>
+            <p className="text-gray-500">{showOutstandingOnly ? '将高质量任务添加到优秀案例' : '在工作台执行任务后会在这里显示记录'}</p>
           </div>
         )}
       </main>

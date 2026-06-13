@@ -1,16 +1,30 @@
 import { useState, useEffect } from 'react';
-import { Zap, Play, Plus, Trash2, Copy, Check, Sparkles, FileText, Wand2, Link2 } from 'lucide-react';
-import { useStore } from '../store/useStore';
+import { Zap, Play, Plus, Trash2, Copy, Check, Sparkles, FileText, Wand2, Link2, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
+import { useStore, FlowExecution } from '../store/useStore';
 
 export default function Workspace() {
-  const { tools, prompts, addTask, getFavoritePrompts } = useStore();
+  const { 
+    tools, 
+    prompts, 
+    addTask, 
+    getFavoritePrompts,
+    flowSteps,
+    addFlowStep,
+    removeFlowStep,
+    reorderFlowSteps,
+    executeFlow,
+    currentFlowExecution,
+    setFlowSteps,
+    currentFlowExecution: execution
+  } = useStore();
+  
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
   const [outputText, setOutputText] = useState('');
   const [isRunning, setIsRunning] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
-  const [flowSteps, setFlowSteps] = useState<string[]>([]);
   const [showPromptSelector, setShowPromptSelector] = useState(false);
+  const [showExecutionResult, setShowExecutionResult] = useState(false);
   
   const favoritePrompts = getFavoritePrompts();
   
@@ -21,6 +35,12 @@ export default function Workspace() {
       setSelectedTool(toolId);
     }
   }, []);
+  
+  useEffect(() => {
+    if (execution?.status === 'completed') {
+      setShowExecutionResult(true);
+    }
+  }, [execution]);
   
   const selectedToolData = tools.find(t => t.id === selectedTool);
   
@@ -45,14 +65,11 @@ export default function Workspace() {
     });
   };
   
-  const handleAddToFlow = () => {
-    if (selectedTool && !flowSteps.includes(selectedTool)) {
-      setFlowSteps([...flowSteps, selectedTool]);
-    }
-  };
-  
-  const handleRemoveFromFlow = (toolId: string) => {
-    setFlowSteps(flowSteps.filter(id => id !== toolId));
+  const handleExecuteFlow = async () => {
+    if (flowSteps.length === 0 || !inputText.trim()) return;
+    
+    setShowExecutionResult(false);
+    await executeFlow(inputText);
   };
   
   const handleSelectPrompt = (promptId: string) => {
@@ -68,6 +85,18 @@ export default function Workspace() {
     navigator.clipboard.writeText(outputText);
   };
   
+  const moveStepUp = (index: number) => {
+    if (index > 0) {
+      reorderFlowSteps(index, index - 1);
+    }
+  };
+  
+  const moveStepDown = (index: number) => {
+    if (index < flowSteps.length - 1) {
+      reorderFlowSteps(index, index + 1);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       <header className="bg-white border-b border-gray-100">
@@ -128,7 +157,7 @@ export default function Workspace() {
                       </div>
                     </div>
                     <button
-                      onClick={handleAddToFlow}
+                      onClick={() => addFlowStep(selectedToolData.id)}
                       disabled={flowSteps.includes(selectedToolData.id)}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                         flowSteps.includes(selectedToolData.id)
@@ -219,7 +248,7 @@ export default function Workspace() {
                       ) : (
                         <>
                           <Play className="w-5 h-5" />
-                          <span>执行</span>
+                          <span>执行单工具</span>
                         </>
                       )}
                     </button>
@@ -247,27 +276,48 @@ export default function Workspace() {
             </div>
           </div>
           
-          <div className="col-span-3">
+          <div className="col-span-3 space-y-6">
             {flowSteps.length > 0 && (
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-24">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900">流程组合</h3>
                   <span className="text-sm text-gray-500">{flowSteps.length} 个步骤</span>
                 </div>
-                <div className="space-y-3">
+                <div className="space-y-2">
                   {flowSteps.map((toolId, index) => {
                     const tool = tools.find(t => t.id === toolId);
                     return (
-                      <div key={toolId} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
-                        <span className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-600">
-                          {index + 1}
-                        </span>
+                      <div key={toolId} className="flex items-center gap-2 p-3 bg-gray-50 rounded-xl">
+                        <button
+                          onClick={() => moveStepUp(index)}
+                          disabled={index === 0}
+                          className="p-1 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors"
+                        >
+                          <ArrowUp className="w-4 h-4 text-gray-500" />
+                        </button>
+                        <button
+                          onClick={() => moveStepDown(index)}
+                          disabled={index === flowSteps.length - 1}
+                          className="p-1 hover:bg-gray-200 disabled:opacity-30 disabled:cursor-not-allowed rounded transition-colors"
+                        >
+                          <ArrowDown className="w-4 h-4 text-gray-500" />
+                        </button>
                         <div className="flex-1">
-                          <p className="font-medium text-gray-900">{tool?.name}</p>
-                          <p className="text-xs text-gray-500">{tool?.category}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-600">
+                              {index + 1}
+                            </span>
+                            <span className="font-medium text-gray-900">{tool?.name}</span>
+                          </div>
+                          {index < flowSteps.length - 1 && (
+                            <div className="ml-8 flex items-center gap-1 text-gray-400">
+                              <ChevronRight className="w-3 h-3" />
+                              <span className="text-xs">输出作为下一个工具的输入</span>
+                            </div>
+                          )}
                         </div>
                         <button
-                          onClick={() => handleRemoveFromFlow(toolId)}
+                          onClick={() => removeFlowStep(toolId)}
                           className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
                         >
                           <Trash2 className="w-4 h-4" />
@@ -277,21 +327,58 @@ export default function Workspace() {
                   })}
                 </div>
                 <div className="mt-4 pt-4 border-t border-gray-100">
-                  <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
-                    <Link2 className="w-4 h-4" />
-                    <span>流程说明</span>
-                  </div>
-                  <p className="text-xs text-gray-500">
-                    多个工具将按顺序执行，前一个工具的输出将作为下一个工具的输入。
-                  </p>
-                  <button className="mt-4 w-full py-2.5 bg-accent-700 hover:bg-accent-800 text-white rounded-xl font-medium transition-colors">
-                    执行流程
+                  <button
+                    onClick={handleExecuteFlow}
+                    disabled={!inputText.trim()}
+                    className="w-full flex items-center justify-center gap-2 py-2.5 bg-accent-700 hover:bg-accent-800 disabled:bg-gray-300 text-white rounded-xl font-medium transition-colors"
+                  >
+                    <Play className="w-5 h-5" />
+                    <span>执行流程</span>
                   </button>
                 </div>
               </div>
             )}
             
-            <div className="mt-6 bg-gradient-to-br from-primary-600 to-accent-700 rounded-2xl p-5 text-white">
+            {execution && showExecutionResult && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <h3 className="font-semibold text-gray-900 mb-4">流程执行结果</h3>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto">
+                  {execution.steps.map((step, index) => (
+                    <div key={index} className="p-3 bg-gray-50 rounded-xl">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
+                          step.status === 'completed' ? 'bg-green-100 text-green-600' :
+                          step.status === 'running' ? 'bg-blue-100 text-blue-600' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {index + 1}
+                        </span>
+                        <span className="font-medium text-gray-900">{step.toolName}</span>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${
+                          step.status === 'completed' ? 'bg-green-100 text-green-700' :
+                          step.status === 'running' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
+                        }`}>
+                          {step.status === 'completed' ? '已完成' : step.status === 'running' ? '执行中' : '等待'}
+                        </span>
+                      </div>
+                      {step.output && (
+                        <p className="text-sm text-gray-600 line-clamp-3">{step.output}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+                {execution.status === 'completed' && (
+                  <div className="mt-4 pt-4 border-t border-gray-100">
+                    <div className="flex items-center gap-2 text-green-600">
+                      <Check className="w-5 h-5" />
+                      <span className="font-medium">流程执行完成</span>
+                    </div>
+                    <p className="text-sm text-gray-500 mt-1">结果已保存到任务记录</p>
+                  </div>
+                )}
+              </div>
+            )}
+            
+            <div className="bg-gradient-to-br from-primary-600 to-accent-700 rounded-2xl p-5 text-white">
               <div className="flex items-center gap-3 mb-3">
                 <Sparkles className="w-6 h-6" />
                 <h3 className="font-semibold">AI 助手提示</h3>
