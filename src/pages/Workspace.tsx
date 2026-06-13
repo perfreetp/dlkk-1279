@@ -1,0 +1,311 @@
+import { useState, useEffect } from 'react';
+import { Zap, Play, Plus, Trash2, Copy, Check, Sparkles, FileText, Wand2, Link2 } from 'lucide-react';
+import { useStore } from '../store/useStore';
+
+export default function Workspace() {
+  const { tools, prompts, addTask, getFavoritePrompts } = useStore();
+  const [selectedTool, setSelectedTool] = useState<string | null>(null);
+  const [inputText, setInputText] = useState('');
+  const [outputText, setOutputText] = useState('');
+  const [isRunning, setIsRunning] = useState(false);
+  const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
+  const [flowSteps, setFlowSteps] = useState<string[]>([]);
+  const [showPromptSelector, setShowPromptSelector] = useState(false);
+  
+  const favoritePrompts = getFavoritePrompts();
+  
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const toolId = params.get('tool');
+    if (toolId) {
+      setSelectedTool(toolId);
+    }
+  }, []);
+  
+  const selectedToolData = tools.find(t => t.id === selectedTool);
+  
+  const handleRun = async () => {
+    if (!selectedTool || !inputText.trim()) return;
+    
+    setIsRunning(true);
+    setOutputText('');
+    
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    
+    setOutputText('AI 正在处理您的请求...\n\n这是生成的结果内容。\n\n人工智能正在改变我们的生活和工作方式，它能够帮助我们更高效地完成各种任务，从写作到翻译，从设计到数据分析。');
+    setIsRunning(false);
+    
+    addTask({
+      userId: 'user1',
+      toolId: selectedTool,
+      toolName: selectedToolData?.name || '',
+      input: inputText,
+      output: outputText,
+      status: 'completed',
+    });
+  };
+  
+  const handleAddToFlow = () => {
+    if (selectedTool && !flowSteps.includes(selectedTool)) {
+      setFlowSteps([...flowSteps, selectedTool]);
+    }
+  };
+  
+  const handleRemoveFromFlow = (toolId: string) => {
+    setFlowSteps(flowSteps.filter(id => id !== toolId));
+  };
+  
+  const handleSelectPrompt = (promptId: string) => {
+    const prompt = prompts.find(p => p.id === promptId);
+    if (prompt) {
+      setInputText(prompt.content);
+      setSelectedPrompt(promptId);
+      setShowPromptSelector(false);
+    }
+  };
+  
+  const handleCopyOutput = () => {
+    navigator.clipboard.writeText(outputText);
+  };
+  
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-100">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">工作台</h1>
+              <p className="text-sm text-gray-500">选择工具并执行任务</p>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <main className="max-w-7xl mx-auto px-6 py-6">
+        <div className="grid grid-cols-12 gap-6">
+          <div className="col-span-3">
+            <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-24">
+              <h3 className="font-semibold text-gray-900 mb-4">选择工具</h3>
+              <ul className="space-y-2">
+                {tools.map((tool) => (
+                  <li key={tool.id}>
+                    <button
+                      onClick={() => setSelectedTool(tool.id)}
+                      className={`w-full flex items-center gap-3 p-3 rounded-xl transition-all ${
+                        selectedTool === tool.id
+                          ? 'bg-primary-600 text-white'
+                          : 'bg-gray-50 text-gray-700 hover:bg-gray-100'
+                      }`}
+                    >
+                      <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${
+                        selectedTool === tool.id ? 'bg-white/20' : 'bg-primary-100'
+                      }`}>
+                        <Zap className={`w-5 h-5 ${selectedTool === tool.id ? 'text-white' : 'text-primary-600'}`} />
+                      </div>
+                      <div className="text-left">
+                        <p className="font-medium">{tool.name}</p>
+                        <p className="text-xs opacity-70">{tool.category}</p>
+                      </div>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+          
+          <div className="col-span-6">
+            <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+              {selectedToolData ? (
+                <div className="p-4 border-b border-gray-100 bg-primary-50">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-primary-100 rounded-xl flex items-center justify-center">
+                        <Zap className="w-5 h-5 text-primary-600" />
+                      </div>
+                      <div>
+                        <h3 className="font-semibold text-gray-900">{selectedToolData.name}</h3>
+                        <p className="text-sm text-gray-500">{selectedToolData.description}</p>
+                      </div>
+                    </div>
+                    <button
+                      onClick={handleAddToFlow}
+                      disabled={flowSteps.includes(selectedToolData.id)}
+                      className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                        flowSteps.includes(selectedToolData.id)
+                          ? 'bg-green-100 text-green-700'
+                          : 'bg-primary-600 text-white hover:bg-primary-700'
+                      }`}
+                    >
+                      {flowSteps.includes(selectedToolData.id) ? (
+                        <>
+                          <Check className="w-4 h-4" />
+                          已添加
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="w-4 h-4" />
+                          添加到流程
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="p-12 text-center">
+                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Wand2 className="w-8 h-8 text-gray-400" />
+                  </div>
+                  <h3 className="text-lg font-medium text-gray-900 mb-2">选择一个工具开始</h3>
+                  <p className="text-gray-500">从左侧选择一个工具来执行任务</p>
+                </div>
+              )}
+              
+              {selectedToolData && (
+                <>
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <label className="font-medium text-gray-700">输入内容</label>
+                      <button
+                        onClick={() => setShowPromptSelector(!showPromptSelector)}
+                        className="flex items-center gap-2 px-3 py-1.5 bg-accent-50 text-accent-700 rounded-lg text-sm font-medium hover:bg-accent-100 transition-colors"
+                      >
+                        <FileText className="w-4 h-4" />
+                        使用提示词
+                      </button>
+                    </div>
+                    
+                    {showPromptSelector && (
+                      <div className="mb-4 p-3 bg-gray-50 rounded-xl">
+                        <p className="text-sm font-medium text-gray-700 mb-2">选择提示词模板:</p>
+                        <div className="space-y-2">
+                          {favoritePrompts.length > 0 ? (
+                            favoritePrompts.map((prompt) => (
+                              <button
+                                key={prompt.id}
+                                onClick={() => handleSelectPrompt(prompt.id)}
+                                className={`w-full text-left p-3 rounded-lg text-sm transition-colors ${
+                                  selectedPrompt === prompt.id ? 'bg-accent-100 text-accent-700' : 'bg-white hover:bg-gray-100 text-gray-700'
+                                }`}
+                              >
+                                {prompt.title}
+                              </button>
+                            ))
+                          ) : (
+                            <p className="text-sm text-gray-400">暂无收藏的提示词</p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    
+                    <textarea
+                      value={inputText}
+                      onChange={(e) => setInputText(e.target.value)}
+                      placeholder="输入您的请求..."
+                      className="w-full h-40 px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-700 focus:border-transparent resize-none"
+                    />
+                  </div>
+                  
+                  <div className="p-4 border-t border-gray-100 bg-gray-50">
+                    <button
+                      onClick={handleRun}
+                      disabled={!inputText.trim() || isRunning}
+                      className="w-full flex items-center justify-center gap-2 py-3 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white rounded-xl font-medium transition-colors"
+                    >
+                      {isRunning ? (
+                        <>
+                          <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                          <span>处理中...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Play className="w-5 h-5" />
+                          <span>执行</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                  
+                  {outputText && (
+                    <div className="p-4 border-t border-gray-100">
+                      <div className="flex items-center justify-between mb-3">
+                        <label className="font-medium text-gray-700">输出结果</label>
+                        <button
+                          onClick={handleCopyOutput}
+                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-600 transition-colors"
+                        >
+                          <Copy className="w-4 h-4" />
+                          复制
+                        </button>
+                      </div>
+                      <div className="p-4 bg-gray-50 rounded-xl min-h-[200px] whitespace-pre-wrap text-gray-700">
+                        {outputText}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          </div>
+          
+          <div className="col-span-3">
+            {flowSteps.length > 0 && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-24">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900">流程组合</h3>
+                  <span className="text-sm text-gray-500">{flowSteps.length} 个步骤</span>
+                </div>
+                <div className="space-y-3">
+                  {flowSteps.map((toolId, index) => {
+                    const tool = tools.find(t => t.id === toolId);
+                    return (
+                      <div key={toolId} className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl">
+                        <span className="w-6 h-6 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-600">
+                          {index + 1}
+                        </span>
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900">{tool?.name}</p>
+                          <p className="text-xs text-gray-500">{tool?.category}</p>
+                        </div>
+                        <button
+                          onClick={() => handleRemoveFromFlow(toolId)}
+                          className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+                <div className="mt-4 pt-4 border-t border-gray-100">
+                  <div className="flex items-center gap-2 mb-3 text-sm text-gray-600">
+                    <Link2 className="w-4 h-4" />
+                    <span>流程说明</span>
+                  </div>
+                  <p className="text-xs text-gray-500">
+                    多个工具将按顺序执行，前一个工具的输出将作为下一个工具的输入。
+                  </p>
+                  <button className="mt-4 w-full py-2.5 bg-accent-700 hover:bg-accent-800 text-white rounded-xl font-medium transition-colors">
+                    执行流程
+                  </button>
+                </div>
+              </div>
+            )}
+            
+            <div className="mt-6 bg-gradient-to-br from-primary-600 to-accent-700 rounded-2xl p-5 text-white">
+              <div className="flex items-center gap-3 mb-3">
+                <Sparkles className="w-6 h-6" />
+                <h3 className="font-semibold">AI 助手提示</h3>
+              </div>
+              <p className="text-sm text-white/80 mb-4">
+                尝试使用提示词模板来获得更好的结果。您可以在提示词库中创建和管理自己的模板。
+              </p>
+              <button className="px-4 py-2 bg-white/20 hover:bg-white/30 rounded-lg text-sm font-medium transition-colors">
+                查看提示词库
+              </button>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+  );
+}

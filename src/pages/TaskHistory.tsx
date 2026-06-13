@@ -1,0 +1,281 @@
+import { useState } from 'react';
+import { Search, Star, Clock, Filter, ChevronDown, ChevronUp, Check, FileText, TrendingUp, Calendar } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { Task } from '../data/types';
+
+type StatusFilter = 'all' | 'pending' | 'running' | 'completed' | 'failed';
+
+export default function TaskHistory() {
+  const { tasks, updateTaskScore } = useStore();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [expandedTask, setExpandedTask] = useState<string | null>(null);
+  const [scoringTask, setScoringTask] = useState<string | null>(null);
+  const [score, setScore] = useState(0);
+  const [comment, setComment] = useState('');
+  
+  const filteredTasks = tasks.filter((task) => {
+    const matchesSearch = searchQuery === '' || 
+      task.toolName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      task.input.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchesStatus = statusFilter === 'all' || task.status === statusFilter;
+    return matchesSearch && matchesStatus;
+  });
+  
+  const groupedTasks = filteredTasks.reduce((acc, task) => {
+    const date = new Date(task.createdAt).toLocaleDateString('zh-CN');
+    if (!acc[date]) acc[date] = [];
+    acc[date].push(task);
+    return acc;
+  }, {} as Record<string, Task[]>);
+  
+  const statusLabels: Record<Task['status'], string> = {
+    pending: '等待中',
+    running: '执行中',
+    completed: '已完成',
+    failed: '失败',
+  };
+  
+  const statusColors: Record<Task['status'], string> = {
+    pending: 'bg-yellow-100 text-yellow-700',
+    running: 'bg-blue-100 text-blue-700',
+    completed: 'bg-green-100 text-green-700',
+    failed: 'bg-red-100 text-red-700',
+  };
+  
+  const handleSubmitScore = (taskId: string) => {
+    if (score > 0) {
+      updateTaskScore(taskId, score, comment);
+      setScoringTask(null);
+      setScore(0);
+      setComment('');
+    }
+  };
+  
+  const formatTime = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' });
+  };
+  
+  const completedTasks = tasks.filter(t => t.status === 'completed');
+  const avgScore = completedTasks.length > 0 
+    ? (completedTasks.reduce((sum, t) => sum + (t.score || 0), 0) / completedTasks.length).toFixed(1)
+    : '0';
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      <header className="bg-white border-b border-gray-100 sticky top-0 z-10">
+        <div className="max-w-7xl mx-auto px-6 py-4">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">任务记录</h1>
+              <p className="text-sm text-gray-500">查看和管理您的任务历史</p>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2 px-4 py-2 bg-green-50 rounded-xl">
+                <TrendingUp className="w-4 h-4 text-green-600" />
+                <span className="text-sm font-medium text-green-700">平均评分 {avgScore}</span>
+              </div>
+              <div className="flex items-center gap-2 px-4 py-2 bg-primary-50 rounded-xl">
+                <FileText className="w-4 h-4 text-primary-600" />
+                <span className="text-sm font-medium text-primary-700">共 {tasks.length} 个任务</span>
+              </div>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder="搜索任务..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-12 pr-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-700 focus:border-transparent transition-all"
+              />
+            </div>
+            <div className="relative">
+              <button
+                className="flex items-center gap-2 px-4 py-3 bg-white border border-gray-200 rounded-xl text-gray-600 hover:bg-gray-50 transition-colors"
+              >
+                <Filter className="w-5 h-5" />
+                <span className="font-medium">{statusFilter === 'all' ? '全部状态' : statusLabels[statusFilter]}</span>
+                <ChevronDown className="w-4 h-4" />
+              </button>
+              <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className="absolute inset-0 opacity-0 cursor-pointer"
+              >
+                <option value="all">全部状态</option>
+                <option value="pending">等待中</option>
+                <option value="running">执行中</option>
+                <option value="completed">已完成</option>
+                <option value="failed">失败</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </header>
+      
+      <main className="max-w-7xl mx-auto px-6 py-6">
+        {Object.entries(groupedTasks).map(([date, dayTasks]) => (
+          <div key={date} className="mb-6">
+            <div className="flex items-center gap-3 mb-4">
+              <Calendar className="w-5 h-5 text-gray-400" />
+              <span className="font-medium text-gray-700">{date}</span>
+              <span className="text-sm text-gray-400">({dayTasks.length} 个任务)</span>
+            </div>
+            
+            <div className="space-y-3">
+              {dayTasks.map((task) => (
+                <div 
+                  key={task.id} 
+                  className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden"
+                >
+                  <div 
+                    className="p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                    onClick={() => setExpandedTask(expandedTask === task.id ? null : task.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
+                          <FileText className="w-6 h-6 text-primary-600" />
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="font-semibold text-gray-900">{task.toolName}</h3>
+                            <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${statusColors[task.status]}`}>
+                              {statusLabels[task.status]}
+                            </span>
+                          </div>
+                          <p className="text-sm text-gray-500 line-clamp-1">{task.input}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-4">
+                        {task.score && (
+                          <div className="flex items-center gap-1">
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Star 
+                                key={star} 
+                                className={`w-4 h-4 ${star <= task.score ? 'text-yellow-500 fill-current' : 'text-gray-300'}`} 
+                              />
+                            ))}
+                          </div>
+                        )}
+                        <span className="text-sm text-gray-400">{formatTime(task.createdAt)}</span>
+                        {expandedTask === task.id ? (
+                          <ChevronUp className="w-5 h-5 text-gray-400" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-400" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {expandedTask === task.id && (
+                    <div className="px-4 pb-4 border-t border-gray-100">
+                      <div className="pt-4 space-y-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">输入内容</label>
+                          <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap">
+                            {task.input}
+                          </div>
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">输出结果</label>
+                          <div className="p-3 bg-gray-50 rounded-xl text-sm text-gray-700 whitespace-pre-wrap min-h-[100px]">
+                            {task.output}
+                          </div>
+                        </div>
+                        
+                        {task.status === 'completed' && !task.score && scoringTask !== task.id && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setScoringTask(task.id);
+                            }}
+                            className="w-full flex items-center justify-center gap-2 py-3 bg-accent-50 hover:bg-accent-100 text-accent-700 rounded-xl font-medium transition-colors"
+                          >
+                            <Star className="w-5 h-5" />
+                            <span>给本次结果评分</span>
+                          </button>
+                        )}
+                        
+                        {scoringTask === task.id && (
+                          <div className="p-4 bg-accent-50 rounded-xl">
+                            <div className="flex items-center gap-2 mb-4">
+                              <Star className="w-5 h-5 text-accent-700" />
+                              <span className="font-medium text-accent-800">评分</span>
+                            </div>
+                            <div className="flex items-center gap-2 mb-4">
+                              {[1, 2, 3, 4, 5].map((star) => (
+                                <button
+                                  key={star}
+                                  onClick={() => setScore(star)}
+                                  className="p-2 rounded-lg transition-colors"
+                                >
+                                  <Star 
+                                    className={`w-8 h-8 ${star <= score ? 'text-yellow-500 fill-current' : 'text-gray-300 hover:text-yellow-400'}`} 
+                                  />
+                                </button>
+                              ))}
+                            </div>
+                            <textarea
+                              value={comment}
+                              onChange={(e) => setComment(e.target.value)}
+                              placeholder="添加评语（可选）"
+                              rows={2}
+                              className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-700 resize-none"
+                            />
+                            <div className="flex items-center justify-end gap-3 mt-3">
+                              <button
+                                onClick={() => setScoringTask(null)}
+                                className="px-4 py-2 text-gray-600 hover:text-gray-800 font-medium"
+                              >
+                                取消
+                              </button>
+                              <button
+                                onClick={() => handleSubmitScore(task.id)}
+                                disabled={score === 0}
+                                className="flex items-center gap-2 px-4 py-2 bg-accent-700 hover:bg-accent-800 disabled:bg-gray-300 text-white rounded-lg font-medium transition-colors"
+                              >
+                                <Check className="w-4 h-4" />
+                                提交评分
+                              </button>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {task.comment && (
+                          <div className="p-3 bg-yellow-50 rounded-xl">
+                            <div className="flex items-center gap-2 mb-1">
+                              <Star className="w-4 h-4 text-yellow-500" />
+                              <span className="text-sm font-medium text-yellow-800">评语</span>
+                            </div>
+                            <p className="text-sm text-yellow-700">{task.comment}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        ))}
+        
+        {filteredTasks.length === 0 && (
+          <div className="text-center py-16">
+            <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <Clock className="w-8 h-8 text-gray-400" />
+            </div>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">暂无任务记录</h3>
+            <p className="text-gray-500">在工作台执行任务后会在这里显示记录</p>
+          </div>
+        )}
+      </main>
+    </div>
+  );
+}
