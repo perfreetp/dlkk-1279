@@ -1,21 +1,37 @@
 import { useState } from 'react';
-import { Users, CreditCard, Clock, Star, Plus, Check, X, AlertCircle, TrendingUp, Briefcase, Lightbulb, FileText, ChevronUp, ChevronDown, Trash2, Edit3, Save } from 'lucide-react';
+import { Users, CreditCard, Clock, Star, Plus, Check, X, AlertCircle, TrendingUp, Briefcase, Lightbulb, FileText, ChevronUp, ChevronDown, Trash2, Edit3, Save, BookOpen } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { Position } from '../data/types';
 import { mockTeam } from '../data/mockData';
 
 export default function TeamSpace() {
-  const { tools, recommendations, applications, addApplication, approveApplication, rejectApplication, addRecommendation, removeRecommendation, reorderRecommendations, getRecommendationsByPosition } = useStore();
-  const [activeTab, setActiveTab] = useState<'quotas' | 'recommendations' | 'applications' | 'suggestions'>('quotas');
+  const { 
+    tools, 
+    recommendations, 
+    applications, 
+    addApplication, 
+    approveApplication, 
+    rejectApplication, 
+    addRecommendation, 
+    removeRecommendation, 
+    reorderRecommendations, 
+    getRecommendationsByPosition,
+    positionConfigs,
+    updatePositionConfig,
+  } = useStore();
+  
+  const [activeTab, setActiveTab] = useState<'quotas' | 'recommendations' | 'applications' | 'suggestions' | 'cases'>('quotas');
   const [showApplicationModal, setShowApplicationModal] = useState(false);
   const [newApplication, setNewApplication] = useState({ toolName: '', description: '' });
   const [editingPosition, setEditingPosition] = useState<Position | null>(null);
+  const [editingGuide, setEditingGuide] = useState({ usageGuide: '', reason: '' });
   
   const positions: Position[] = ['文案', '设计', '翻译', '运营'];
   
   const tabs = [
     { id: 'quotas', label: '额度管理', icon: CreditCard },
     { id: 'recommendations', label: '推荐清单', icon: Star },
+    { id: 'cases', label: '优秀案例', icon: BookOpen },
     { id: 'applications', label: '工具申请', icon: FileText },
     { id: 'suggestions', label: '整理建议', icon: Lightbulb },
   ];
@@ -94,7 +110,6 @@ export default function TeamSpace() {
   };
   
   const moveRecommendationUp = (position: Position, index: number) => {
-    const recs = getRecommendationsByPosition(position);
     if (index > 0) {
       reorderRecommendations(position, index, index - 1);
     }
@@ -107,14 +122,9 @@ export default function TeamSpace() {
     }
   };
   
-  const handleAddRecommendation = (position: Position) => {
-    const positionRecs = getRecommendationsByPosition(position);
-    const availableTools = tools.filter(t => !positionRecs.some(r => r.toolId === t.id));
-    
-    if (availableTools.length > 0) {
-      const firstTool = availableTools[0];
-      addRecommendation(position, firstTool.id, firstTool.name);
-    }
+  const handleSavePositionGuide = (position: Position) => {
+    updatePositionConfig(position, editingGuide.usageGuide, editingGuide.reason);
+    setEditingPosition(null);
   };
 
   return (
@@ -210,7 +220,7 @@ export default function TeamSpace() {
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-lg font-semibold text-gray-900">团队推荐工具</h2>
-                <p className="text-sm text-gray-500">按岗位推荐适合的工具，支持自定义维护</p>
+                <p className="text-sm text-gray-500">按岗位推荐适合的工具，支持自定义维护和使用说明</p>
               </div>
             </div>
             
@@ -218,6 +228,7 @@ export default function TeamSpace() {
               const positionRecs = getRecommendationsByPosition(position);
               const availableTools = tools.filter(t => !positionRecs.some(r => r.toolId === t.id));
               const isEditing = editingPosition === position;
+              const config = positionConfigs[position];
               
               return (
                 <div key={position} className="bg-white rounded-2xl p-5 shadow-sm border border-gray-100">
@@ -227,20 +238,27 @@ export default function TeamSpace() {
                         <Briefcase className="w-5 h-5 text-accent-700" />
                       </div>
                       <div>
-                        <h3 className="font-semibold text-gray-900">{position}岗位推荐</h3>
+                        <h3 className="font-semibold text-gray-900">{position}岗位</h3>
                         <p className="text-sm text-gray-500">{positionRecs.length} 个推荐工具</p>
                       </div>
                     </div>
                     <button
-                      onClick={() => setEditingPosition(isEditing ? null : position)}
+                      onClick={() => {
+                        if (isEditing) {
+                          handleSavePositionGuide(position);
+                        } else {
+                          setEditingGuide({ usageGuide: config.usageGuide, reason: config.reason });
+                          setEditingPosition(position);
+                        }
+                      }}
                       className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-                        isEditing ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        isEditing ? 'bg-green-600 text-white hover:bg-green-700' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
                       }`}
                     >
                       {isEditing ? (
                         <>
                           <Save className="w-4 h-4" />
-                          完成编辑
+                          保存说明
                         </>
                       ) : (
                         <>
@@ -250,6 +268,50 @@ export default function TeamSpace() {
                       )}
                     </button>
                   </div>
+                  
+                  {isEditing ? (
+                    <div className="mb-4 p-4 bg-blue-50 rounded-xl space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">岗位使用说明</label>
+                        <textarea
+                          value={editingGuide.usageGuide}
+                          onChange={(e) => setEditingGuide({ ...editingGuide, usageGuide: e.target.value })}
+                          placeholder="输入该岗位的工具使用说明..."
+                          rows={3}
+                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-700 resize-none"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-2">推荐理由</label>
+                        <textarea
+                          value={editingGuide.reason}
+                          onChange={(e) => setEditingGuide({ ...editingGuide, reason: e.target.value })}
+                          placeholder="输入推荐这些工具的理由..."
+                          rows={2}
+                          className="w-full px-4 py-2 bg-white border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-accent-700 resize-none"
+                        />
+                      </div>
+                    </div>
+                  ) : (
+                    config.usageGuide && (
+                      <div className="mb-4 p-4 bg-blue-50 rounded-xl">
+                        <div className="flex items-center gap-2 mb-2">
+                          <BookOpen className="w-4 h-4 text-blue-600" />
+                          <span className="font-medium text-blue-800">使用说明</span>
+                        </div>
+                        <p className="text-sm text-gray-700">{config.usageGuide}</p>
+                        {config.reason && (
+                          <>
+                            <div className="flex items-center gap-2 mt-3 mb-2">
+                              <Star className="w-4 h-4 text-yellow-500" />
+                              <span className="font-medium text-yellow-800">推荐理由</span>
+                            </div>
+                            <p className="text-sm text-gray-700">{config.reason}</p>
+                          </>
+                        )}
+                      </div>
+                    )
+                  )}
                   
                   <div className="space-y-2">
                     {positionRecs.map((rec, index) => {
@@ -317,6 +379,35 @@ export default function TeamSpace() {
                 </div>
               );
             })}
+          </div>
+        )}
+        
+        {activeTab === 'cases' && (
+          <div className="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+            <div className="flex items-center gap-3 mb-4">
+              <BookOpen className="w-6 h-6 text-blue-600" />
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">团队优秀案例库</h2>
+                <p className="text-sm text-gray-500">按岗位查看团队成员的优秀案例和可复用成果</p>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {positions.map((position) => (
+                <div key={position} className="p-4 bg-gray-50 rounded-xl">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Briefcase className="w-5 h-5 text-accent-600" />
+                    <h3 className="font-semibold text-gray-900">{position}岗位</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-3">
+                    {positionConfigs[position]?.usageGuide || '暂无案例'}
+                  </p>
+                  <div className="flex items-center justify-between text-xs text-gray-400">
+                    <span>{getRecommendationsByPosition(position).length} 个推荐工具</span>
+                    <button className="text-blue-600 hover:text-blue-700">查看全部</button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
         

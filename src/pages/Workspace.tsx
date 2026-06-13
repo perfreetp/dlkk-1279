@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Zap, Play, Plus, Trash2, Copy, Check, Sparkles, FileText, Wand2, Link2, ArrowUp, ArrowDown, ChevronRight } from 'lucide-react';
+import { Zap, Play, Plus, Trash2, Copy, Check, Sparkles, FileText, Wand2, ArrowUp, ArrowDown, ChevronRight, Bookmark, FolderOpen, Save, X, RotateCcw } from 'lucide-react';
 import { useStore, FlowExecution } from '../store/useStore';
 
 export default function Workspace() {
@@ -14,8 +14,13 @@ export default function Workspace() {
     reorderFlowSteps,
     executeFlow,
     currentFlowExecution,
+    flowTemplates,
+    addFlowTemplate,
+    deleteFlowTemplate,
+    loadFlowTemplate,
     setFlowSteps,
-    currentFlowExecution: execution
+    tasks,
+    addToOutstandingCases,
   } = useStore();
   
   const [selectedTool, setSelectedTool] = useState<string | null>(null);
@@ -25,6 +30,11 @@ export default function Workspace() {
   const [selectedPrompt, setSelectedPrompt] = useState<string | null>(null);
   const [showPromptSelector, setShowPromptSelector] = useState(false);
   const [showExecutionResult, setShowExecutionResult] = useState(false);
+  const [showTemplateModal, setShowTemplateModal] = useState(false);
+  const [showTemplateList, setShowTemplateList] = useState(false);
+  const [templateName, setTemplateName] = useState('');
+  const [templateDescription, setTemplateDescription] = useState('');
+  const [showCopyModal, setShowCopyModal] = useState(false);
   
   const favoritePrompts = getFavoritePrompts();
   
@@ -37,10 +47,10 @@ export default function Workspace() {
   }, []);
   
   useEffect(() => {
-    if (execution?.status === 'completed') {
+    if (currentFlowExecution?.status === 'completed') {
       setShowExecutionResult(true);
     }
-  }, [execution]);
+  }, [currentFlowExecution]);
   
   const selectedToolData = tools.find(t => t.id === selectedTool);
   
@@ -52,7 +62,8 @@ export default function Workspace() {
     
     await new Promise(resolve => setTimeout(resolve, 2000));
     
-    setOutputText('AI 正在处理您的请求...\n\n这是生成的结果内容。\n\n人工智能正在改变我们的生活和工作方式，它能够帮助我们更高效地完成各种任务，从写作到翻译，从设计到数据分析。');
+    const result = 'AI 正在处理您的请求...\n\n这是生成的结果内容。\n\n人工智能正在改变我们的生活和工作方式，它能够帮助我们更高效地完成各种任务，从写作到翻译，从设计到数据分析。';
+    setOutputText(result);
     setIsRunning(false);
     
     addTask({
@@ -60,7 +71,7 @@ export default function Workspace() {
       toolId: selectedTool,
       toolName: selectedToolData?.name || '',
       input: inputText,
-      output: outputText,
+      output: result,
       status: 'completed',
     });
   };
@@ -85,6 +96,13 @@ export default function Workspace() {
     navigator.clipboard.writeText(outputText);
   };
   
+  const handleCopyAsNewTask = () => {
+    if (outputText) {
+      setInputText(outputText);
+      setShowCopyModal(false);
+    }
+  };
+  
   const moveStepUp = (index: number) => {
     if (index > 0) {
       reorderFlowSteps(index, index - 1);
@@ -94,6 +112,27 @@ export default function Workspace() {
   const moveStepDown = (index: number) => {
     if (index < flowSteps.length - 1) {
       reorderFlowSteps(index, index + 1);
+    }
+  };
+  
+  const handleSaveTemplate = () => {
+    if (templateName.trim() && flowSteps.length > 0) {
+      addFlowTemplate(templateName, templateDescription);
+      setTemplateName('');
+      setTemplateDescription('');
+      setShowTemplateModal(false);
+    }
+  };
+  
+  const handleLoadTemplate = (templateId: string) => {
+    loadFlowTemplate(templateId);
+    setShowTemplateList(false);
+  };
+  
+  const handleSaveToOutstanding = () => {
+    const latestTask = tasks[0];
+    if (latestTask) {
+      addToOutstandingCases(latestTask.id);
     }
   };
 
@@ -114,7 +153,9 @@ export default function Workspace() {
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-3">
             <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-24">
-              <h3 className="font-semibold text-gray-900 mb-4">选择工具</h3>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-gray-900">选择工具</h3>
+              </div>
               <ul className="space-y-2">
                 {tools.map((tool) => (
                   <li key={tool.id}>
@@ -258,13 +299,29 @@ export default function Workspace() {
                     <div className="p-4 border-t border-gray-100">
                       <div className="flex items-center justify-between mb-3">
                         <label className="font-medium text-gray-700">输出结果</label>
-                        <button
-                          onClick={handleCopyOutput}
-                          className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-600 transition-colors"
-                        >
-                          <Copy className="w-4 h-4" />
-                          复制
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={handleSaveToOutstanding}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-yellow-50 hover:bg-yellow-100 rounded-lg text-sm font-medium text-yellow-700 transition-colors"
+                          >
+                            <Sparkles className="w-4 h-4" />
+                            收藏
+                          </button>
+                          <button
+                            onClick={() => setShowCopyModal(true)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-600 transition-colors"
+                          >
+                            <RotateCcw className="w-4 h-4" />
+                            复制到输入
+                          </button>
+                          <button
+                            onClick={handleCopyOutput}
+                            className="flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm font-medium text-gray-600 transition-colors"
+                          >
+                            <Copy className="w-4 h-4" />
+                            复制
+                          </button>
+                        </div>
                       </div>
                       <div className="p-4 bg-gray-50 rounded-xl min-h-[200px] whitespace-pre-wrap text-gray-700">
                         {outputText}
@@ -278,7 +335,7 @@ export default function Workspace() {
           
           <div className="col-span-3 space-y-6">
             {flowSteps.length > 0 && (
-              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 sticky top-24">
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="font-semibold text-gray-900">流程组合</h3>
                   <span className="text-sm text-gray-500">{flowSteps.length} 个步骤</span>
@@ -326,7 +383,21 @@ export default function Workspace() {
                     );
                   })}
                 </div>
-                <div className="mt-4 pt-4 border-t border-gray-100">
+                <div className="mt-4 pt-4 border-t border-gray-100 space-y-2">
+                  <button
+                    onClick={() => setShowTemplateList(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-xl font-medium transition-colors"
+                  >
+                    <FolderOpen className="w-4 h-4" />
+                    <span>从模板载入</span>
+                  </button>
+                  <button
+                    onClick={() => setShowTemplateModal(true)}
+                    className="w-full flex items-center justify-center gap-2 py-2 bg-green-50 hover:bg-green-100 text-green-700 rounded-xl font-medium transition-colors"
+                  >
+                    <Bookmark className="w-4 h-4" />
+                    <span>保存为模板</span>
+                  </button>
                   <button
                     onClick={handleExecuteFlow}
                     disabled={!inputText.trim()}
@@ -339,11 +410,47 @@ export default function Workspace() {
               </div>
             )}
             
-            {execution && showExecutionResult && (
+            {showTemplateList && flowTemplates.length > 0 && (
+              <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="font-semibold text-gray-900">流程模板</h3>
+                  <button onClick={() => setShowTemplateList(false)} className="p-1 hover:bg-gray-100 rounded">
+                    <X className="w-4 h-4 text-gray-500" />
+                  </button>
+                </div>
+                <div className="space-y-2 max-h-[300px] overflow-y-auto">
+                  {flowTemplates.map((template) => (
+                    <div key={template.id} className="p-3 bg-gray-50 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-medium text-gray-900">{template.name}</span>
+                        <span className="text-xs text-gray-400">使用 {template.usageCount} 次</span>
+                      </div>
+                      <p className="text-xs text-gray-500 mb-2">{template.description}</p>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => handleLoadTemplate(template.id)}
+                          className="flex-1 py-1.5 bg-primary-600 hover:bg-primary-700 text-white rounded-lg text-sm font-medium transition-colors"
+                        >
+                          载入
+                        </button>
+                        <button
+                          onClick={() => deleteFlowTemplate(template.id)}
+                          className="p-1.5 hover:bg-red-100 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {currentFlowExecution && showExecutionResult && (
               <div className="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
                 <h3 className="font-semibold text-gray-900 mb-4">流程执行结果</h3>
                 <div className="space-y-3 max-h-[400px] overflow-y-auto">
-                  {execution.steps.map((step, index) => (
+                  {currentFlowExecution.steps.map((step, index) => (
                     <div key={index} className="p-3 bg-gray-50 rounded-xl">
                       <div className="flex items-center gap-2 mb-2">
                         <span className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold ${
@@ -366,13 +473,20 @@ export default function Workspace() {
                     </div>
                   ))}
                 </div>
-                {execution.status === 'completed' && (
+                {currentFlowExecution.status === 'completed' && (
                   <div className="mt-4 pt-4 border-t border-gray-100">
-                    <div className="flex items-center gap-2 text-green-600">
+                    <div className="flex items-center gap-2 text-green-600 mb-2">
                       <Check className="w-5 h-5" />
                       <span className="font-medium">流程执行完成</span>
                     </div>
-                    <p className="text-sm text-gray-500 mt-1">结果已保存到任务记录</p>
+                    <p className="text-sm text-gray-500 mb-3">结果已保存到任务记录</p>
+                    <button
+                      onClick={handleSaveToOutstanding}
+                      className="w-full flex items-center justify-center gap-2 py-2 bg-yellow-50 hover:bg-yellow-100 text-yellow-700 rounded-xl font-medium transition-colors"
+                    >
+                      <Sparkles className="w-4 h-4" />
+                      收藏为优秀案例
+                    </button>
                   </div>
                 )}
               </div>
@@ -393,6 +507,101 @@ export default function Workspace() {
           </div>
         </div>
       </main>
+      
+      {showTemplateModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-semibold text-gray-900">保存流程模板</h2>
+            </div>
+            <div className="p-6 space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">模板名称</label>
+                <input
+                  type="text"
+                  value={templateName}
+                  onChange={(e) => setTemplateName(e.target.value)}
+                  placeholder="输入模板名称"
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-700 focus:border-transparent"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">模板描述</label>
+                <textarea
+                  value={templateDescription}
+                  onChange={(e) => setTemplateDescription(e.target.value)}
+                  placeholder="输入模板描述（可选）"
+                  rows={3}
+                  className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-accent-700 focus:border-transparent resize-none"
+                />
+              </div>
+              <div className="p-3 bg-gray-50 rounded-xl">
+                <p className="text-sm text-gray-600">包含 {flowSteps.length} 个步骤:</p>
+                <ul className="mt-2 space-y-1">
+                  {flowSteps.map((toolId, index) => {
+                    const tool = tools.find(t => t.id === toolId);
+                    return (
+                      <li key={toolId} className="text-sm text-gray-700 flex items-center gap-2">
+                        <span className="w-5 h-5 bg-primary-100 rounded-full flex items-center justify-center text-xs font-bold text-primary-600">
+                          {index + 1}
+                        </span>
+                        {tool?.name}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100">
+              <button
+                onClick={() => setShowTemplateModal(false)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveTemplate}
+                disabled={!templateName.trim()}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 disabled:bg-gray-300 text-white rounded-xl font-medium transition-colors"
+              >
+                <Save className="w-4 h-4" />
+                保存模板
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {showCopyModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-md">
+            <div className="p-6 border-b border-gray-100">
+              <h2 className="text-xl font-semibold text-gray-900">复制输出结果</h2>
+            </div>
+            <div className="p-6">
+              <p className="text-gray-600 mb-4">将当前输出结果复制到输入框，可以基于此结果继续优化或执行其他工具。</p>
+              <div className="p-3 bg-gray-50 rounded-xl max-h-[150px] overflow-y-auto">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap">{outputText.substring(0, 200)}...</p>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-3 p-6 border-t border-gray-100">
+              <button
+                onClick={() => setShowCopyModal(false)}
+                className="px-4 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl font-medium transition-colors"
+              >
+                取消
+              </button>
+              <button
+                onClick={handleCopyAsNewTask}
+                className="flex items-center gap-2 px-4 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl font-medium transition-colors"
+              >
+                <RotateCcw className="w-4 h-4" />
+                复制到输入框
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Search, Filter, TrendingUp, Clock, Zap } from 'lucide-react';
+import { Search, Filter, TrendingUp, Clock, Zap, BookOpen, Star } from 'lucide-react';
 import ToolCard from '../components/ToolCard';
 import { useStore } from '../store/useStore';
 import { Category, Position } from '../data/types';
@@ -8,7 +8,7 @@ const categories: (Category | 'all')[] = ['all', '写作', '配图', '翻译', '
 const positions: (Position | 'all')[] = ['all', '文案', '设计', '翻译', '运营'];
 
 export default function ToolMarketplace() {
-  const { tools, searchQuery, setSearchQuery, selectedCategory, setCategory, selectedPosition, setPosition, getFilteredTools, favoriteTools } = useStore();
+  const { tools, searchQuery, setSearchQuery, selectedCategory, setCategory, selectedPosition, setPosition, getFilteredTools, favoriteTools, positionConfigs } = useStore();
   const [showFilters, setShowFilters] = useState(false);
   
   const filteredTools = getFilteredTools();
@@ -25,6 +25,8 @@ export default function ToolMarketplace() {
       window.location.href = `/workspace?tool=${toolId}`;
     }
   };
+
+  const selectedPositionConfig = selectedPosition !== 'all' ? positionConfigs[selectedPosition] : null;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -100,12 +102,39 @@ export default function ToolMarketplace() {
         </div>
       </header>
       
+      {selectedPosition !== 'all' && selectedPositionConfig && (
+        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-b border-blue-100">
+          <div className="max-w-7xl mx-auto px-6 py-4">
+            <div className="flex items-start gap-4">
+              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                <BookOpen className="w-6 h-6 text-blue-600" />
+              </div>
+              <div className="flex-1">
+                <h2 className="text-lg font-semibold text-gray-900 mb-1">
+                  {selectedPosition}岗位工具推荐
+                </h2>
+                <p className="text-sm text-gray-600 mb-2">
+                  {selectedPositionConfig.usageGuide}
+                </p>
+                {selectedPositionConfig.reason && (
+                  <div className="flex items-center gap-2 mt-2">
+                    <Star className="w-4 h-4 text-yellow-500" />
+                    <span className="text-sm text-yellow-700">{selectedPositionConfig.reason}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+      
       <main className="max-w-7xl mx-auto px-6 py-6">
         <div className="grid grid-cols-12 gap-6">
           <div className="col-span-8">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-semibold text-gray-900">
-                全部工具 <span className="text-gray-400 font-normal">({filteredTools.length})</span>
+                {selectedPosition !== 'all' ? `${selectedPosition}岗位推荐` : '全部工具'} 
+                <span className="text-gray-400 font-normal">({filteredTools.length})</span>
               </h2>
             </div>
             
